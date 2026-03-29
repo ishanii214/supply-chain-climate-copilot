@@ -76,7 +76,7 @@ cd supply-chain-climate-copilot
 pip install -r requirements.txt
 
 # 4. Run the app
-streamlit run app.py
+streamlit run dashboard/app.py
 ```
 
 App opens at **http://localhost:8501**
