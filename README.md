@@ -58,6 +58,7 @@ Since this is a hackathon project, here's what's actually backed by real data vs
 Every decision also gets logged to a local SQLite database so there's a full audit trail per delivery.
 
 ## Project structure
+```
 supply-chain-climate-copilot/
 ├── agents/
 │   ├── orchestrator_v2.py
@@ -95,6 +96,7 @@ supply-chain-climate-copilot/
 │   └── test_orchestrator_v2.py
 ├── requirements.txt
 └── README.md
+```
 
 ## Tests
 
