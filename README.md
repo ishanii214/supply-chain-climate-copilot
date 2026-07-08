@@ -1,188 +1,113 @@
-# 🚀 Supply Chain Climate Copilot
-### GenAI-powered Multi-Agent System for Climate-Resilient Logistics
+# Supply Chain Climate Copilot
 
-> **ET AI Hackathon 2026** — Problem Statement 5: Domain-Specialized AI Agents 
-> with Compliance Guardrails
+Submission for ET AI Hackathon 2026, Problem Statement 5 (domain-specific AI agents with compliance guardrails). A multi-agent system for logistics — give it a delivery (weather + route + optionally a photo of the package), and it runs 8 agents to figure out how risky the delivery is and what should be done about it, then explains the decision in plain English.
 
-[![Python](https://img.shields.io/badge/Python-3.9+-blue)](https://python.org)
-[![Streamlit](https://img.shields.io/badge/Streamlit-1.x-red)](https://streamlit.io)
-[![Databricks](https://img.shields.io/badge/Platform-Databricks-orange)](https://databricks.com)
+## Overview
 
----
+Most delay/disruption alerts in logistics apps just say *something's wrong* after it's already happened, with no explanation. This project reasons through the problem step by step instead — check the weather, predict the delay, check if the route is safe, check if the package looks damaged, decide what to do, and then explain why — rather than just outputting a number.
 
-## 🎯 Problem
-Logistics networks lose millions daily to climate disruptions — floods, cyclones, 
-heatwaves — yet current systems only alert **after** failures occur, with no 
-explanation or guidance.
+## Architecture
+INGEST → DETECT_DISRUPTION → PREDICT_DELAY → OPTIMIZE_ROUTE
+→ DETECT_DAMAGE → PLAN_ACTIONS → EXECUTE_ACTIONS
+→ EXPLAIN → COMPUTE_IMPACT → MONITOR
 
-## 💡 Solution
-An **8-agent AI pipeline** that converts raw climate + logistics data into 
-proactive decisions — detecting disruptions, predicting delays, assessing 
-package damage, optimizing routes, and explaining every decision in plain English.
+This is a custom state machine rather than a framework like LangGraph, built this way to work through how state machines and multi-agent coordination actually function, rather than relying on a framework's abstractions from the start.
 
-**Demo route:** Chennai → Bengaluru (336.6 km)
+Each step is a separate agent:
+- **Disruption Detector** — takes rainfall/wind/temperature and calculates a hazard score (weighted, rainfall matters most since that's what causes most delivery problems in India), then maps that to LOW/MEDIUM/HIGH/CRITICAL
+- **Delay Predictor** — a RandomForest model (scikit-learn) trained on synthetic data, since real delivery records weren't available
+- **Route Optimizer** — pulls alternative routes from OSRM and picks the best one factoring in the hazard score, not just distance
+- **Damage Detector** — doesn't use a trained CV model, it's simpler than that — checks pixel color ratios (dark/brown pixels can indicate stains or water damage) and does blur detection so it can ask for a clearer photo if needed
+- **Action Planner** — a rule-based decision tree that outputs things like HOLD, REROUTE, RESCHEDULE, or PROCEED
+- **Action Execution** — simulates what would happen next (reroute, alerts, etc.)
+- **Monitoring** — checks thresholds and looks for patterns across recent runs
 
----
+The LLM (Groq, Llama 3.3) only comes in at the very end, to turn all these structured results into an explanation a non-technical person could read. It's not doing the actual decision-making — that's rule-based/ML, on purpose, so it's more predictable and auditable.
 
-## ✨ Key Features
+There's also an event bus and a SQLite audit log recording everything that happens, mainly for the dashboard and for debugging — they're not what actually controls the pipeline, that's the orchestrator directly.
 
-| Tab | What it shows |
-|-----|--------------|
-| 🚀 Live Agent Demo | Run all 8 agents, multimodal image upload, GPS + weather feeds, route optimizer |
-| 🌊 What-If Scenario | Flood/cyclone/heatwave simulation + custom GenAI scenario input |
-| 📡 Event Stream | Real-time agent communication flow + conflict resolution example |
-| 💰 Impact Dashboard | ROI model, ESG carbon metrics, fleet-wide extrapolation to ₹1.57B |
-| 📋 Audit Trail | Per-agent decision log + 4 compliance guardrails |
-| 📊 Risk Report | Plain-English AI report with full structured explainability |
-| 🖥️ Infrastructure | MLflow model registry + Delta Lake schema + Databricks cluster metrics |
+## Setup
 
----
-
-## 🏗️ Agent Architecture
-```
-Orchestrator V2 (state machine + EventBus pub/sub)
-       │
-       ├── 1. Data Ingestion Agent      → GPS, weather, traffic, climate feeds
-       ├── 2. Disruption Detector       → flags climate events on route
-       ├── 3. Delay Predictor           → ML model, predicts delay in hours  
-       ├── 4. Route Optimizer           → evaluates 3 candidate routes
-       ├── 5. Damage Detector           → CV model on uploaded parcel image
-       ├── 6. Action Planner            → decides HOLD / PROCEED / REROUTE
-       ├── 7. Action Execution Agent    → fires WhatsApp alerts, ERP webhooks, SMS
-       └── 8. Monitoring Agent          → watches for new signals post-dispatch
-
-All agents communicate via EventBus (pub/sub).
-State flows through Orchestrator V2 state machine.
-Decisions logged to Delta Lake audit trail.
-```
-
----
-
-## ⚙️ Setup Instructions
-
-### Prerequisites
-- Python 3.9+
-- pip
-
-### Installation
 ```bash
-# 1. Clone the repository
 git clone https://github.com/ishanii214/supply-chain-climate-copilot.git
-
-# 2. Go into the project folder
 cd supply-chain-climate-copilot
-
-# 3. Install dependencies
 pip install -r requirements.txt
-
-# 4. Run the app
 streamlit run dashboard/app.py
 ```
 
-App opens at **http://localhost:8501**
+For real LLM explanations instead of the template fallback, add a Groq API key in a `.env` file: `GROQ_API_KEY=your_key_here` (free at console.groq.com).
 
-### How to demo
-1. Select a Delivery ID (e.g. DEL-10000)
-2. Upload a parcel image (JPG/PNG)
-3. Click **"Run all 8 agents"**
-4. Explore all 7 tabs
+There's also `python demo/demo_flow.py` for an end-to-end run in the terminal without the dashboard.
 
----
+## Data & Assumptions
 
-## 📁 Project Structure
-```
+Since this is a hackathon project, here's what's actually backed by real data vs. what's an assumption for the demo:
+
+- The delay model is trained on **synthetic data** (see `data/generator.py`) — a formula mapping weather/traffic to delay hours, with some randomness added so it's not perfectly predictable. Real historical delivery data wasn't available for this.
+- Weather at inference time is real though — it comes from Open-Meteo's free API.
+- Route data comes from OSRM's public routing API, with a fallback to straight-line distance if that's down.
+- The business impact numbers (cost saved, delay reduction %) shown in the dashboard are calculated from stated assumptions — a 40% "worse without the system" baseline, ₹1,500/hour delay cost, etc. These are editable in the Impact Model tab. The hackathon rules actually ask for exactly this kind of thing — "back-of-envelope math is fine as long as the logic holds" — so the assumptions are kept visible rather than hidden.
+
+## Guardrails
+
+`compliance/guardrails.py` handles three things:
+1. Redacts PII (driver name/phone, customer address/email) before any processing
+2. Checks required fields exist before running the pipeline
+3. Sanity-checks the output — caps unrealistic delay predictions, flags low-confidence or CRITICAL results for human review
+
+Every decision also gets logged to a local SQLite database so there's a full audit trail per delivery.
+
+## Project structure
 supply-chain-climate-copilot/
-├── app.py                    # Main Streamlit application (all UI + agent calls)
 ├── agents/
-│   ├── orchestrator.py       # Orchestrator V2 state machine
-│   ├── data_ingestion.py     # Pulls GPS, weather, traffic data
+│   ├── orchestrator_v2.py
+│   ├── data_ingestion_agent.py
 │   ├── disruption_detector.py
-│   ├── delay_predictor.py    # ML delay prediction model
-│   ├── route_optimizer.py    # 3-route climate-aware scoring
-│   ├── damage_detector.py    # CV model for parcel image analysis
-│   ├── action_planner.py     # Decision engine
-│   ├── action_executor.py    # Fires alerts and webhooks
-│   └── monitoring_agent.py   # Post-dispatch monitoring
-├── event_bus.py              # Pub/sub EventBus implementation
-├── requirements.txt          # Python dependencies
-├── README.md                 # This file
-└── architecture.pdf          # 1-2 page architecture document
-```
+│   ├── delay_predictor.py
+│   ├── route_optimizer.py
+│   ├── damage_detector.py
+│   ├── action_planner.py
+│   ├── action_execution_agent.py
+│   └── monitoring_agent.py
+├── core/
+│   ├── base_agent.py
+│   ├── event_bus.py
+│   ├── state_manager.py
+│   └── impact_model.py
+├── compliance/
+│   ├── guardrails.py
+│   └── audit_logger.py
+├── llm/
+│   ├── reasoner.py
+│   └── explainer.py
+├── api/
+│   └── server.py
+├── dashboard/
+│   └── app.py
+├── demo/
+│   └── demo_flow.py
+├── data/
+│   ├── generator.py
+│   └── weather.py
+├── tests/
+│   ├── test_event_bus.py
+│   ├── test_impact_model.py
+│   └── test_orchestrator_v2.py
+├── requirements.txt
+└── README.md
 
----
+## Tests
 
-## 🤖 ML Models (tracked via MLflow)
+A few tests, mostly to check the trickier logic actually works:
+- `test_impact_model.py` checks the impact math against hand-calculated expected values
+- `test_event_bus.py` checks that if one subscriber crashes, it doesn't take down the rest of the event bus
+- `test_orchestrator_v2.py` runs the whole pipeline end-to-end and checks all 10 steps complete, that low-severity deliveries correctly skip the action-execution step, and that memory persists across multiple runs
 
-| Model | Version | Stage | Accuracy | F1 Score |
-|-------|---------|-------|----------|----------|
-| delay_predictor | v3 | Production | 91.2% | 0.89 |
-| disruption_detector | v2 | Production | 88.7% | 0.86 |
-| damage_classifier | v4 | Staging | 85.1% | 0.83 |
-| route_optimizer | v1 | Production | 93.4% | 0.91 |
-| anomaly_detector | v2 | Production | 87.3% | 0.85 |
+Run any of them directly, e.g. `python tests/test_orchestrator_v2.py`.
 
-Models auto-deployed via Databricks Model Serving endpoints.
+## Improvements
 
----
-
-## 📊 Business Impact Model
-
-| Metric | Value |
-|--------|-------|
-| Delay reduction per delivery | 28.6% (1.2h saved) |
-| Cost saved per delivery | ₹8,600 |
-| Daily savings (500 deliveries/day) | ₹43,00,000 |
-| Annual fleet-wide savings | ₹1,56,95,00,000 |
-| SLA compliance rate | 96.4% |
-| CO₂ saved per delivery | 12.4 kg |
-| Annual CO₂ reduction (fleet) | 2,263 tonnes |
-
-**Assumptions:** baseline delay multiplier 1.4×, ₹1,500/delay hour,  
-4h SLA window, 0.89 kg CO₂/km truck emission factor.  
-Full auditable model visible in the Impact Dashboard tab.
-
----
-
-## 🛡️ Compliance Guardrails
-
-| Guardrail | Rule |
-|-----------|------|
-| PII Anonymization | Driver GPS hashed SHA-256; addresses truncated to district |
-| Confidence Threshold | Autonomous actions only if model confidence ≥ 0.75 |
-| Regulatory Alignment | Motor Vehicles Act Section 66 (route permits) |
-| Safe Action Boundary | No auto-reroute for shipments valued >₹5,00,000 |
-
----
-
-## 🌍 Data Sources
-
-| Source | Type | Data | Used By |
-|--------|------|------|---------|
-| Kaggle | Public | Logistics, traffic, road safety | delay_predictor, route_optimizer |
-| NASA EarthData | Public | Climate, earth observation, satellite | disruption_detector |
-| World Bank | Public | Climate risk, development indicators | disruption_detector, llm_reasoner |
-| IMD | Public | Rainfall, temperature, cyclone tracks | disruption_detector, delay_predictor |
-| OpenWeatherMap | Live API | Real-time weather feed | All agents |
-| Internal GPS | Simulated | Vehicle traces, delivery timestamps | route_optimizer |
-| Parcel Images | Uploaded | Damage classification input | damage_classifier |
-| Synthetic | Generated | Flood/cyclone/heatwave training scenarios | All agents (training) |
-
----
-
-## 🔮 Scalability — Industry Extensions
-
-- **Smart Cities** — Pre-position emergency vehicles, close flood-prone roads via same EventBus
-- **Banking & Trade Finance** — Climate-adjusted delivery risk for trade finance instruments  
-- **Insurance** — Real-time damage detection triggers pre-notification claim workflows
-- **ESG Reporting** — Scope 3 emissions tracking, SLA breach rates by climate zone
-
-**Future roadmap:** Real-time IoT sensors, satellite imagery integration, 
-smart city platform APIs.
-
----
-
-## 🏆 Hackathon
-
-**Event:** ET AI Hackathon 2026  
-**Problem Statement:** PS5 — Domain-Specialized AI Agents with Compliance Guardrails  
-**Category:** Supply Chain Intelligence Agents
+- The delay model only knows what it learned from a synthetic formula — real delivery data would make it far more trustworthy
+- The damage detector is more of a placeholder than a real solution — checking pixel colors works for a demo, but it's guessing, not actually seeing damage the way a trained CNN would
+- The audit logger opens a fresh SQLite connection on every single call — fine at this scale, not how it should be done for anything with real traffic
+- The fleet-wide savings numbers in the impact tab are extrapolated from a pretty small sample, so those annual figures shouldn't be taken too seriously without a lot more real data behind them
