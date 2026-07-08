@@ -1,23 +1,6 @@
 """
-Orchestrator V2 — LangGraph-inspired state-machine orchestrator.
-
-Replaces the linear for-loop in the original orchestrator with a directed
-execution graph.  Each node is an agent; edges are conditional.
-
-Execution graph:
-  INGEST → DETECT_DISRUPTION → PREDICT_DELAY → OPTIMIZE_ROUTE
-         → DETECT_DAMAGE → PLAN_ACTIONS → EXECUTE_ACTIONS
-         → EXPLAIN → COMPUTE_IMPACT → MONITOR → DONE
-
-Conditional edges:
-  • If severity == LOW and no damage: skip EXECUTE_ACTIONS (just PROCEED)
-  • If severity == CRITICAL: force human-approval flag
-
-Features:
-  • Step-by-step execution with state passing
-  • Full event trail via EventBus
-  • Memory of past runs via StateManager
-  • Resumable (can pick up from any step)
+Orchestrator V2 - runs the multi-agent supply chain pipeline as a
+sequence of steps (INGEST -> DETECT_DISRUPTION -> ... -> MONITOR).
 """
 
 from __future__ import annotations
@@ -75,8 +58,7 @@ class OrchestratorV2:
         from agents.action_execution_agent import ActionExecutionAgent
         from agents.monitoring_agent import MonitoringAgent
         from llm.reasoner import LLMReasoner
-        from llm.explainer import LLMExplainer
-
+        
         self._agents = {
             "ingestion": DataIngestionAgent(event_bus=self.event_bus, audit_logger=self.audit),
             "disruption": DisruptionDetector(),
@@ -87,13 +69,11 @@ class OrchestratorV2:
             "action_executor": ActionExecutionAgent(event_bus=self.event_bus, audit_logger=self.audit),
             "monitoring": MonitoringAgent(event_bus=self.event_bus, audit_logger=self.audit),
             "reasoner": LLMReasoner(),
-            "explainer": LLMExplainer(),
         }
         self._agents_loaded = True
 
-    # ════════════════════════════════════════════════════════════════════
     #  MAIN ENTRY POINT
-    # ════════════════════════════════════════════════════════════════════
+    
     def run(
         self,
         delivery: dict,
@@ -115,7 +95,7 @@ class OrchestratorV2:
         print(f"  Delivery: {delivery_id}")
         print(f"{'='*60}")
 
-        # ── Create pipeline state ──────────────────────────────────────
+        # Create pipeline state
         pipeline = self.state_manager.create_state(delivery)
 
         # Publish pipeline start event
@@ -126,7 +106,7 @@ class OrchestratorV2:
             data={"delivery_id": delivery_id, "steps": self.STEPS},
         ))
 
-        # ── Clean and validate input ──────────────────────────────────
+        # Clean and validate input 
         delivery = self.guardrails.clean_input(delivery)
         self.guardrails.validate_input(delivery)
 
@@ -140,10 +120,10 @@ class OrchestratorV2:
             "business_params": business_params or {},
         }
 
-        # ── Execute each step ─────────────────────────────────────────
+        # Execute each step 
         for step in self.STEPS:
             pipeline.mark_step(step)
-            print(f"\n  ▸ Step: {step}")
+            print(f"\n  Step: {step}")
             try:
                 ctx = self._execute_step(step, ctx, pipeline)
             except Exception as exc:
@@ -152,10 +132,10 @@ class OrchestratorV2:
                     "error": str(exc),
                     "timestamp": datetime.utcnow().isoformat(),
                 })
-                print(f"    ✗ Error in {step}: {exc}")
+                print(f"    Error in {step}: {exc}")
                 # Continue to next step — graceful degradation
 
-        # ── Finalize ──────────────────────────────────────────────────
+        # Finalize 
         self.state_manager.complete(pipeline)
 
         # Build the final result
@@ -179,15 +159,14 @@ class OrchestratorV2:
         })
 
         print(f"\n{'='*60}")
-        print(f"  ✓ Pipeline complete | Risk: {result.get('overall_risk')}")
-        print(f"  ✓ Events: {len(self.event_bus.get_history(delivery_id))}")
+        print(f"  Pipeline complete | Risk: {result.get('overall_risk')}")
+        print(f"  Events: {len(self.event_bus.get_history(delivery_id))}")
         print(f"{'='*60}\n")
 
         return result
 
-    # ════════════════════════════════════════════════════════════════════
     #  STEP DISPATCH — each step runs one agent and updates context
-    # ════════════════════════════════════════════════════════════════════
+
     def _execute_step(self, step: str, ctx: dict, pipeline: PipelineState) -> dict:
 
         if step == "INGEST":
@@ -363,9 +342,8 @@ class OrchestratorV2:
 
         return ctx
 
-    # ════════════════════════════════════════════════════════════════════
     #  BUILD FINAL RESULT — backward-compatible with v1
-    # ════════════════════════════════════════════════════════════════════
+
     def _build_result(self, pipeline: PipelineState, ctx: dict) -> dict:
         return {
             "delivery_id": pipeline.delivery_id,
@@ -396,9 +374,8 @@ class OrchestratorV2:
             "completed_at": pipeline.completed_at,
         }
 
-    # ════════════════════════════════════════════════════════════════════
     #  ACCESSORS for API / dashboard
-    # ════════════════════════════════════════════════════════════════════
+  
     def get_events(self, delivery_id: str) -> list[dict]:
         return self.event_bus.get_history(delivery_id)
 
@@ -406,7 +383,7 @@ class OrchestratorV2:
         return self.state_manager.get_memory(last_n)
 
 
-# ── Quick self-test ─────────────────────────────────────────────────────────
+# Quick self-test
 if __name__ == "__main__":
     import pandas as pd
 

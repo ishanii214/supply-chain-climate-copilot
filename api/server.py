@@ -7,7 +7,6 @@ sys.path.append(".")
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
 
-from agents.orchestrator import Orchestrator
 from agents.orchestrator_v2 import OrchestratorV2
 from compliance.audit_logger import AuditLogger
 from llm.explainer import LLMExplainer
@@ -17,8 +16,7 @@ from core.impact_model import compute_fleet_impact
 app = FastAPI(title="Supply Intelligence Agent", version="0.1.0")
 
 # Reuse a single agent instance to avoid repeated ML model loads.
-orch = Orchestrator()
-orch_v2 = OrchestratorV2()
+orch = OrchestratorV2()
 
 
 class DeliveryPayload(BaseModel):
@@ -62,9 +60,10 @@ def health():
     return {"status": "ok"}
 
 
-# ── V1 endpoint (backward compatible) ──────────────────────────────────────
+# Main analysis endpoint — runs the full multi-agent pipeline
 @app.post("/api/analyze")
 def analyze(req: AnalyzeRequest):
+    """Run the full multi-agent pipeline: event bus, impact model, and monitoring."""
     override = SCENARIO_OVERRIDES.get(req.scenario)
     image_bytes = _decode_image_base64(req.image_base64)
 
@@ -85,47 +84,22 @@ def analyze(req: AnalyzeRequest):
     return result
 
 
-# ── V2 endpoint (multi-agent pipeline) ─────────────────────────────────────
-@app.post("/api/analyze/v2")
-def analyze_v2(req: AnalyzeRequest):
-    """Run the full multi-agent pipeline with event bus, impact model, and monitoring."""
-    override = SCENARIO_OVERRIDES.get(req.scenario)
-    image_bytes = _decode_image_base64(req.image_base64)
-
-    result = orch_v2.run(
-        req.delivery.model_dump(),
-        driver_notes=req.driver_notes or "",
-        image_bytes=image_bytes,
-        weather_override=override,
-        business_params=req.business_params,
-    )
-
-    if req.include_explanation:
-        try:
-            result["plain_english_report"] = LLMExplainer().explain(result)
-        except Exception as e:
-            result["plain_english_report"] = f"Explanation unavailable: {e}"
-
-    return result
-
-
-# ── Event stream endpoint ──────────────────────────────────────────────────
+# Event stream endpoint
 @app.get("/api/events/{delivery_id}")
 def get_events(delivery_id: str):
-    """Get the event stream for a specific delivery (from the V2 pipeline)."""
-    events = orch_v2.get_events(delivery_id)
+    """Get the event stream for a specific delivery."""
+    events = orch.get_events(delivery_id)
     return {"delivery_id": delivery_id, "events": events, "count": len(events)}
 
 
-# ── Impact model endpoint ─────────────────────────────────────────────────
+# Impact model endpoint
 @app.get("/api/impact")
 def get_impact():
     """Get fleet-wide impact metrics from past pipeline runs."""
-    memory = orch_v2.get_memory(last_n=50)
+    memory = orch.get_memory(last_n=50)
     if not memory:
-        return {"message": "No pipeline runs yet. Run /api/analyze/v2 first."}
+        return {"message": "No pipeline runs yet. Run /api/analyze first."}
 
-    # Build impact list from memory
     from core.impact_model import compute_single_delivery_impact
     impacts = []
     for run in memory:
@@ -141,9 +115,8 @@ def get_impact():
     return {"fleet_impact": fleet, "runs_analyzed": len(impacts)}
 
 
-# ── Audit endpoint ─────────────────────────────────────────────────────────
+# Audit endpoint
 @app.get("/api/audit/{delivery_id}")
 def audit_for_delivery(delivery_id: str):
     audit = AuditLogger()
     return {"delivery_id": delivery_id, "events": audit.get_for_delivery(delivery_id)}
-

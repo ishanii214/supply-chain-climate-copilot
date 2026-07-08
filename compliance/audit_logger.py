@@ -4,8 +4,7 @@ from datetime import datetime
 
 class AuditLogger:
     """
-    Records EVERY decision made by every agent.
-    Judges will look at this to verify your system is trustworthy.
+    Records EVERY decision made by every agent.+
     """
     
     def __init__(self, db_path="data/audit.db"):

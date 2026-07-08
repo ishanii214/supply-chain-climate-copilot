@@ -14,7 +14,7 @@ from datetime import datetime
 from typing import Any, Callable
 
 
-# ─── Event types ────────────────────────────────────────────────────────────
+# Event types 
 class EventType:
     """Named constants for every event in the system."""
     DATA_READY           = "DATA_READY"
@@ -31,7 +31,7 @@ class EventType:
     AGENT_ERROR          = "AGENT_ERROR"
 
 
-# ─── Event payload ──────────────────────────────────────────────────────────
+# Event payload 
 @dataclass
 class Event:
     event_type: str
@@ -42,7 +42,7 @@ class Event:
     timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
 
 
-# ─── The bus itself ─────────────────────────────────────────────────────────
+# The bus itself 
 class EventBus:
     """In-process pub/sub event bus with full history."""
 
@@ -50,7 +50,7 @@ class EventBus:
         self._subscribers: dict[str, list[Callable[[Event], None]]] = {}
         self._history: list[Event] = []
 
-    # ── subscribe / unsubscribe ─────────────────────────────────────────────
+    # subscribe / unsubscribe     
     def subscribe(self, event_type: str, callback: Callable[[Event], None]) -> None:
         self._subscribers.setdefault(event_type, []).append(callback)
 
@@ -60,7 +60,7 @@ class EventBus:
                 cb for cb in self._subscribers[event_type] if cb is not callback
             ]
 
-    # ── publish ─────────────────────────────────────────────────────────────
+    # publish 
     def publish(self, event: Event) -> None:
         """Publish an event: store it, then notify every subscriber."""
         self._history.append(event)
@@ -80,7 +80,7 @@ class EventBus:
                 )
                 self._history.append(error_event)
 
-    # ── query helpers ───────────────────────────────────────────────────────
+    # query helpers 
     def get_history(self, delivery_id: str | None = None) -> list[dict]:
         """Return history as plain dicts (JSON-friendly)."""
         events = self._history

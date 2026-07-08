@@ -97,6 +97,8 @@ class StateManager:
         summary = {
             "delivery_id": state.delivery_id,
             "completed_at": state.completed_at,
+            "origin": state.delivery.get("origin", ""),
+            "destination": state.delivery.get("destination", ""),
             "severity": state.disruption.get("severity", "UNKNOWN"),
             "delay_hours": state.delay.get("predicted_delay_hours", 0),
             "dispatch_decision": state.action_plan.get("dispatch_decision", "N/A"),

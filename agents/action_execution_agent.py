@@ -5,10 +5,10 @@ This is the "muscles" of the system.  The ActionPlanner says *what* to do;
 this agent *does* it (or simulates doing it for the hackathon demo).
 
 Capabilities:
-  1. Auto-rerouting       → calls route optimizer with updated constraints
-  2. Delivery rescheduling → computes new delivery windows
-  3. Risk alerts           → generates structured SMS/email alert payloads
-  4. Inventory pre-positioning → suggests warehouse stock moves
+  1. Auto-rerouting       ->calls route optimizer with updated constraints
+  2. Delivery rescheduling -> computes delivery windows
+  3. Risk alerts           -> generates structured SMS/email alert payloads
+  4. Inventory pre-positioning -> suggests warehouse stock moves
 """
 
 from __future__ import annotations
@@ -39,34 +39,34 @@ class ActionExecutionAgent(BaseAgent):
 
         executed_actions: list[dict] = []
 
-        # ── 1. Auto-rerouting ──────────────────────────────────────────
+        # 1. Auto-rerouting 
         if dispatch_decision in ("REROUTE_AND_BUFFER",):
             reroute_result = self._execute_reroute(delivery_id, route, severity)
             executed_actions.append(reroute_result)
 
-        # ── 2. Delivery rescheduling ───────────────────────────────────
+        # 2. Delivery rescheduling
         if dispatch_decision in ("RESCHEDULE_PRIMARY", "HOLD_DISPATCH_STOP"):
             reschedule_result = self._execute_reschedule(delivery_id, delay_hours, severity)
             executed_actions.append(reschedule_result)
 
-        # ── 3. Risk alerts ─────────────────────────────────────────────
+        # 3. Risk alerts
         if severity in ("HIGH", "CRITICAL") or dispatch_decision.startswith("HOLD"):
             alert_result = self._send_risk_alerts(delivery_id, severity, delay_hours, dispatch_decision)
             executed_actions.append(alert_result)
 
-        # ── 4. Inventory pre-positioning ───────────────────────────────
+        # 4. Inventory pre-positioning
         if severity in ("HIGH", "CRITICAL") and delay_hours > 6:
             inventory_result = self._preposition_inventory(
                 delivery_id, state.get("delivery", {}), delay_hours
             )
             executed_actions.append(inventory_result)
 
-        # ── 5. Damage handling ─────────────────────────────────────────
+        # 5. Damage handling
         if damage.get("flagged", False):
             damage_result = self._handle_damage(delivery_id, damage)
             executed_actions.append(damage_result)
 
-        # ── Default: proceed normally ──────────────────────────────────
+        # Default: proceed normally 
         if not executed_actions:
             executed_actions.append({
                 "action_type": "PROCEED_NORMAL",
@@ -88,7 +88,7 @@ class ActionExecutionAgent(BaseAgent):
         print(f"  [{self.agent_name}] Executed {len(executed_actions)} action(s)")
         return result
 
-    # ── Action implementations (simulated for hackathon) ────────────────
+    # 1. Action implementations (simulated for hackathon) 
 
     def _execute_reroute(self, delivery_id: str, route: dict, severity: str) -> dict:
         """Simulate auto-rerouting via a safer corridor."""

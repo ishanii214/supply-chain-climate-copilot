@@ -31,7 +31,7 @@ def test_full_pipeline_flood():
         weather_override={"rainfall_mm": 120, "wind_kmh": 65, "temperature_c": 28},
     )
 
-    # ── Validate all key sections exist ─────────────────────────────
+    # Validate all key sections exist 
     assert "disruption" in result, "Missing disruption"
     assert "delay" in result, "Missing delay"
     assert "route" in result, "Missing route"
@@ -44,16 +44,16 @@ def test_full_pipeline_flood():
     assert "event_stream" in result, "Missing event_stream"
     assert "pipeline_metadata" in result, "Missing pipeline_metadata"
 
-    # ── Validate severity (rainfall=120mm should be HIGH or CRITICAL) ──
+    # Validate severity (rainfall=120mm should be HIGH or CRITICAL) 
     assert result["disruption"]["severity"] in ("HIGH", "CRITICAL")
 
-    # ── Validate impact has required fields ─────────────────────────
+    # Validate impact has required fields
     impact = result["impact"]
     assert "delay_reduction_pct" in impact
     assert "total_cost_saved_inr" in impact
     assert "meets_sla" in impact
 
-    # ── Validate event stream has events ────────────────────────────
+    # Validate event stream has events 
     events = result["event_stream"]
     assert len(events) >= 5, f"Expected ≥5 events, got {len(events)}"
     event_types = [e["event_type"] for e in events]
@@ -61,12 +61,12 @@ def test_full_pipeline_flood():
     assert "DISRUPTION_DETECTED" in event_types
     assert "DELAY_PREDICTED" in event_types
 
-    # ── Validate pipeline metadata ──────────────────────────────────
+    # Validate pipeline metadata
     meta = result["pipeline_metadata"]
     assert meta["version"] == "v2"
     assert len(meta["steps_completed"]) == 10  # all 10 steps
 
-    # ── Validate action execution ran (severity > LOW) ──────────────
+    # Validate action execution ran (severity > LOW) 
     ae = result["action_execution"]
     assert ae.get("skipped") is not True, "Actions should execute for HIGH severity"
 

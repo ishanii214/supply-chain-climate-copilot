@@ -2,10 +2,10 @@
 Monitoring Agent — watches for SLA breaches, risk escalation, and anomalies.
 
 Responsibilities:
-  • Post-pipeline health check on every run
-  • Detects trends from pipeline memory (consecutive HIGH runs)
-  • Generates ALERT events when thresholds are breached
-  • Provides system health summary for the dashboard
+  -Post-pipeline health check on every run
+  -Detects trends from pipeline memory (consecutive HIGH runs)
+  -Generates ALERT events when thresholds are breached
+  -Provides system health summary for the dashboard
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ from core.event_bus import EventType
 class MonitoringAgent(BaseAgent):
     agent_name = "monitoring_agent"
 
-    # ── Configurable thresholds ─────────────────────────────────────────
+    # Configurable thresholds
     CONSECUTIVE_HIGH_THRESHOLD = 3       # alert after N consecutive HIGH+ runs
     DELAY_ALERT_HOURS = 12.0             # alert if delay > this
     SLA_COMPLIANCE_FLOOR_PCT = 80.0      # alert if SLA drops below this
@@ -35,7 +35,7 @@ class MonitoringAgent(BaseAgent):
         alerts: list[dict] = []
         health_checks: list[dict] = []
 
-        # ── 1. Delay threshold check ───────────────────────────────────
+        # 1. Delay threshold check
         delay_hours = float(state.get("delay", {}).get("predicted_delay_hours", 0))
         if delay_hours > self.DELAY_ALERT_HOURS:
             alert = {
@@ -53,7 +53,7 @@ class MonitoringAgent(BaseAgent):
             "threshold": self.DELAY_ALERT_HOURS,
         })
 
-        # ── 2. Severity escalation check ───────────────────────────────
+        # 2. Severity escalation check
         severity = state.get("disruption", {}).get("severity", "LOW")
         if severity == "CRITICAL":
             alerts.append({
@@ -69,7 +69,7 @@ class MonitoringAgent(BaseAgent):
             "value": severity,
         })
 
-        # ── 3. Damage flag check ───────────────────────────────────────
+        # 3. Damage flag check
         damage_flagged = state.get("damage", {}).get("flagged", False)
         if damage_flagged:
             alerts.append({
@@ -85,7 +85,7 @@ class MonitoringAgent(BaseAgent):
             "value": damage_flagged,
         })
 
-        # ── 4. Pipeline error check ────────────────────────────────────
+        # 4. Pipeline error check
         errors = state.get("errors", [])
         if errors:
             alerts.append({
@@ -101,7 +101,7 @@ class MonitoringAgent(BaseAgent):
             "value": len(errors),
         })
 
-        # ── 5. Trend analysis from memory ──────────────────────────────
+        # 5. Trend analysis from memory
         memory = state.get("_memory", [])
         if len(memory) >= self.CONSECUTIVE_HIGH_THRESHOLD:
             recent = memory[-self.CONSECUTIVE_HIGH_THRESHOLD:]
@@ -117,7 +117,7 @@ class MonitoringAgent(BaseAgent):
                     "timestamp": datetime.utcnow().isoformat(),
                 })
 
-        # ── Publish alerts ─────────────────────────────────────────────
+        # Publish alerts 
         for alert in alerts:
             self.publish(EventType.ALERT, alert, delivery_id=delivery_id)
 

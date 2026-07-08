@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 
-# ─── Configurable assumptions ──────────────────────────────────────────────
+# Configurable assumptions 
 @dataclass
 class ImpactAssumptions:
     """
@@ -43,7 +43,7 @@ class ImpactAssumptions:
     stockout_cost_per_event_inr: float = 25_000.0
 
 
-# ─── Compute impact for a single delivery ──────────────────────────────────
+# Compute impact for a single delivery
 def compute_single_delivery_impact(
     predicted_delay_hours: float,
     severity: str,
@@ -56,7 +56,7 @@ def compute_single_delivery_impact(
     """
     a = assumptions or ImpactAssumptions()
 
-    # ─ 1. Delay reduction ───────────────────────────────────────────────
+    # 1. Delay reduction
     # Formula: baseline_delay = predicted_delay * multiplier
     #          delay_saved    = baseline_delay - predicted_delay
     #          if rerouted, we additionally shave reroute_saving off predicted
@@ -73,7 +73,7 @@ def compute_single_delivery_impact(
         round(delay_saved_hours / baseline_delay * 100, 1) if baseline_delay > 0 else 0
     )
 
-    # ─ 2. Cost savings ──────────────────────────────────────────────────
+    # 2. Cost savings 
     delay_cost_saved = delay_saved_hours * a.cost_per_delay_hour_inr
     damage_cost_saved = (
         a.cost_per_damage_claim_inr * a.damage_detection_accuracy
@@ -82,7 +82,7 @@ def compute_single_delivery_impact(
     )
     total_cost_saved = delay_cost_saved + damage_cost_saved
 
-    # ─ 3. SLA ───────────────────────────────────────────────────────────
+    # 3. SLA
     # A delivery meets SLA if its system_delay <= sla_window_hours
     meets_sla = system_delay <= a.sla_window_hours
 
@@ -99,7 +99,7 @@ def compute_single_delivery_impact(
     }
 
 
-# ─── Compute fleet-wide daily impact ───────────────────────────────────────
+# Compute fleet-wide daily impact 
 def compute_fleet_impact(
     delivery_impacts: list[dict[str, Any]],
     assumptions: ImpactAssumptions | None = None,
@@ -139,7 +139,7 @@ def compute_fleet_impact(
     }
 
 
-# ─── Quick self-test ────────────────────────────────────────────────────────
+# Quick self-test 
 if __name__ == "__main__":
     single = compute_single_delivery_impact(
         predicted_delay_hours=6.0,

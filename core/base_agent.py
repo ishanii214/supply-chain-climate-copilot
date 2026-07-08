@@ -2,10 +2,10 @@
 BaseAgent — abstract class that every agent extends.
 
 Provides:
-  • Lifecycle hooks (initialize / process / shutdown)
-  • Automatic audit logging per decision
-  • Event bus integration (publish / subscribe helpers)
-  • Retry-with-backoff on transient failures
+  -Lifecycle hooks (initialize / process / shutdown)
+  -Automatic audit logging per decision
+  -Event bus integration (publish / subscribe helpers)
+  -Retry-with-backoff on transient failures
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ class BaseAgent(ABC):
         self.max_retries = max_retries
         self._initialized = False
 
-    # ── lifecycle hooks ─────────────────────────────────────────────────────
+    # lifecycle hooks 
     def initialize(self) -> None:
         """Called once before the first process(). Override for setup."""
         self._initialized = True
@@ -55,7 +55,7 @@ class BaseAgent(ABC):
         """Called once after pipeline completes. Override for cleanup."""
         pass
 
-    # ── safe execution with retry ───────────────────────────────────────────
+    # safe execution with retry 
     def safe_process(self, state: dict[str, Any]) -> dict[str, Any]:
         """Run process() with retry and error handling. Used by orchestrator."""
         if not self._initialized:
@@ -91,7 +91,7 @@ class BaseAgent(ABC):
         self._publish_error(state, last_error)
         return {"error": str(last_error), "agent": self.agent_name}
 
-    # ── event helpers ───────────────────────────────────────────────────────
+    # event helpers 
     def publish(self, event_type: str, data: dict, delivery_id: str = "") -> None:
         event = Event(
             event_type=event_type,
@@ -109,7 +109,7 @@ class BaseAgent(ABC):
         """Override to react to subscribed events."""
         pass
 
-    # ── internals ───────────────────────────────────────────────────────────
+    # internals 
     def _publish_error(self, state: dict, error: Exception | None) -> None:
         self.publish(
             EventType.AGENT_ERROR,
